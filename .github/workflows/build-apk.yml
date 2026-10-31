@@ -2,17 +2,17 @@
 name: Build MIC-BETA APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
@@ -27,49 +27,25 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Accept Android SDK Licenses
-        run: yes | sdkmanager --licenses || true
-
-      - name: Install Android SDK Platform
-        run: |
-          sdkmanager \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      - name: Extract Android Project ZIP
-        run: |
-          mkdir -p extracted
-          unzip -q MIC-BETA-ANDROID-PHONE-BUILD.zip -d extracted
-
-      - name: Locate Android Project
-        run: |
-          SETTINGS_FILE=$(find extracted -name settings.gradle -o -name settings.gradle.kts | head -n 1)
-
-          if [ -z "$SETTINGS_FILE" ]; then
-            echo "ERROR: settings.gradle not found!"
-            echo "Check your ZIP project structure."
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-
-          echo "Android project found: $PROJECT_DIR"
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
+          accept-android-sdk-licenses: true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+
+      - name: Grant permission
+        run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: |
-          cd "$PROJECT_DIR"
-          gradle --no-daemon assembleDebug
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MIC-BETA-ANDROID-debug-apk
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          name: MIC-BETA-APK
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
