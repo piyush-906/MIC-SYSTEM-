@@ -1,9 +1,11 @@
+
 name: Build MIC-BETA APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -14,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -26,25 +28,48 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android platform
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
 
-      - name: Extract Android project ZIP
+      - name: Install Android SDK Platform
         run: |
-          mkdir extracted
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Extract Android Project ZIP
+        run: |
+          mkdir -p extracted
           unzip -q MIC-BETA-ANDROID-PHONE-BUILD.zip -d extracted
-          SETTINGS_FILE=$(find extracted -name settings.gradle -type f | head -n 1)
+
+      - name: Locate Android Project
+        run: |
+          SETTINGS_FILE=$(find extracted -name settings.gradle -o -name settings.gradle.kts | head -n 1)
+
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "settings.gradle not found"
+            echo "ERROR: settings.gradle not found!"
+            echo "Check your ZIP project structure."
             exit 1
           fi
-          echo "PROJECT_DIR=$(dirname "$SETTINGS_FILE")" >> "$GITHUB_ENV"
 
-      - name: Build APK
-        run: gradle -p "$PROJECT_DIR" --no-daemon assembleDebug
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+          echo "Android project found: $PROJECT_DIR"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MIC-BETA-ANDROID-APK
+          name: MIC-BETA-ANDROID-debug-apk
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
